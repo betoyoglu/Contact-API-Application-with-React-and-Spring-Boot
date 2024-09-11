@@ -1,6 +1,12 @@
 package io.getarrays.contactapi.service;
 
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
 import javax.management.RuntimeException;
 
 import org.springframework.data.domain.Page;
@@ -13,6 +19,8 @@ import io.getarrays.contactapi.repo.ContactRepo;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.multipart;
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 @Service
 @Slf4j //otomatik olarak logger oluşturur. log nesnesini kullanarak log yazabilirsin
@@ -39,6 +47,40 @@ public class ContactService {
 		return true;
 	}
 	
-	public String uploadPhoto(String id, MultipartFile file)
+	public String uploadPhoto(String id, MultipartFile file) {
+		Contact contact = getContact(id);
+		String photoUrl = photoFunction.apply(id, file);
+		contact.setPhotoUrl(photoUrl);
+		contactRepo.save(contact);
+		
+		return photoUrl;
+		
+	}
+	
+	private final Function<String, String> fileExtension = filename -> Optional.of(filename).filter(name-> name.contains("."))
+			.map(name -> "." + name.substring(filename.lastIndexOf(".")+ 1)).orElse(".png");
+	
+	//string ve multipartfile alıp string döndürecek
+	private final BiFunction<String, MultipartFile, String> photoFunction(id, image) -> {
+		
+		try {
+			Path fileStorageLocation = Paths.get(PHOTO_DIRECTORY).toAbsolutePath().normalize();
+				if(!Files.exists(fileStorageLocation)) {
+					Files.createDirectories(fileStorageLocation);
+				}
+			Files.copy(image.getInputStream(), fileStorageLocation.resolve(id + fileExtension.apply(image.getOriginalFileName())), REPLACE_EXISTING);
+			return ServletUriComponentsBuilder
+					.fromCurrentContextPath()
+					.path("/contacts/image/" + id + fileExtension.apply(image.getOriginalFileName()))
+					.toUriString();
+			
+		}
+		catch (Exception exception){
+			throw new RuntimeException("Unable to save image")
+			
+		}
+	};
+
+	
 
 }
